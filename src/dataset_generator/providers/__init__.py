@@ -23,4 +23,13 @@ def create_provider(config: dict) -> Provider:
             model=config["model"],
             timeout=config.get("timeout", 600.0),
         )
+    if kind == "anthropic":
+        from dataset_generator.providers.anthropic import AnthropicProvider
+
+        return AnthropicProvider(
+            api_key=config.get("api_key", ""),
+            model=config.get("model", "claude-sonnet-4-6"),
+            timeout=config.get("timeout", 600.0),
+            max_tokens=config.get("max_tokens", 8192),
+        )
     raise ValueError(f"Unknown provider kind: {kind}")

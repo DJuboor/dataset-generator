@@ -1,7 +1,7 @@
 """Tests for provider creation and OpenAI-compatible provider."""
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -140,6 +140,52 @@ class TestOpenAIProviderCompleteJSON:
 
         call_kwargs = provider.client.chat.completions.create.call_args[1]
         assert call_kwargs["max_tokens"] == 50
+
+
+class TestCreateAnthropicProvider:
+    def test_creates_anthropic_provider(self):
+        with patch.dict("sys.modules", {"anthropic": MagicMock()}):
+            from importlib import reload
+
+            import dataset_generator.providers.anthropic as anth_mod
+
+            reload(anth_mod)
+
+            provider = create_provider(
+                {"kind": "anthropic", "model": "claude-sonnet-4-6", "api_key": "test"}
+            )
+            assert provider.model == "claude-sonnet-4-6"
+
+    def test_anthropic_import_error(self):
+        with (
+            patch.dict("sys.modules", {"anthropic": None}),
+            pytest.raises(ImportError, match="anthropic"),
+        ):
+            from dataset_generator.providers.anthropic import AnthropicProvider
+
+            AnthropicProvider(model="claude-sonnet-4-6", api_key="test")
+
+
+class TestSplitSystem:
+    def test_extracts_system_message(self):
+        from dataset_generator.providers.anthropic import _split_system
+
+        messages = [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "user", "content": "Hi"},
+        ]
+        system, user_msgs = _split_system(messages)
+        assert system == "You are helpful."
+        assert len(user_msgs) == 1
+        assert user_msgs[0]["role"] == "user"
+
+    def test_no_system_message(self):
+        from dataset_generator.providers.anthropic import _split_system
+
+        messages = [{"role": "user", "content": "Hi"}]
+        system, user_msgs = _split_system(messages)
+        assert system == ""
+        assert len(user_msgs) == 1
 
 
 class TestExtractUsage:

@@ -51,8 +51,11 @@ huggingface = [
     "datasets>=2.0",
     "huggingface-hub>=0.20",
 ]
+anthropic = [
+    "anthropic>=0.39",
+]
 all = [
-    "dataset-generator[dev,docs,huggingface]",
+    "dataset-generator[dev,docs,huggingface,anthropic]",
 ]
 
 [project.scripts]

@@ -1,11 +1,26 @@
 # dataset-generator
 
+[![CI](https://github.com/DJuboor/dataset-generator/actions/workflows/ci.yml/badge.svg)](https://github.com/DJuboor/dataset-generator/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-258%20passed-brightgreen.svg)]()
-[![Coverage](https://img.shields.io/badge/coverage-93%25-brightgreen.svg)]()
 
-**Turn any LLM into a dataset factory.** Generate high-quality synthetic training data for classification, NER, QA, SFT, DPO, and more — using OpenAI, Ollama, vLLM, or any OpenAI-compatible API.
+**Turn any LLM into a dataset factory.** Generate high-quality synthetic training data for classification, NER, QA, SFT, DPO, and more — using OpenAI, Anthropic, Ollama, vLLM, or any OpenAI-compatible API.
+
+```
+$ dg generate --task classification --labels "positive,negative" --domain "product reviews" -n 100
+
+INFO: Local model detected: using max_workers=1, batch_size=5
+INFO: Generating 100 samples (24 batches of 5, 1 workers, strategy=direct)
+Generating: 100%|████████████████████████| 24/24 [02:15<00:00, tokens=18,432]
+INFO: Raw samples: 120
+INFO: Final dataset: 100 samples
+INFO: Wrote 100 samples to data/output.jsonl
+
+$ head -3 data/output.jsonl
+{"text": "The battery life on this laptop is incredible, easily lasting 12 hours.", "label": "positive"}
+{"text": "Returned it after a week. The screen had dead pixels on arrival.", "label": "negative"}
+{"text": "The package arrived on Tuesday as scheduled.", "label": "neutral"}
+```
 
 ---
 
@@ -38,6 +53,10 @@ DG_BASE_URL=https://api.openai.com/v1 DG_API_KEY=sk-... DG_MODEL=gpt-4o dg gener
 
 # Ollama (local, free — the default)
 dg generate
+
+# Anthropic (native SDK — requires: uv add 'dataset-generator[anthropic]')
+# Set kind: anthropic in config.yaml, or use env vars:
+DG_API_KEY=sk-ant-... dg generate --task sft --model claude-sonnet-4-6
 
 # vLLM, Together, Groq, LiteLLM — anything OpenAI-compatible
 DG_BASE_URL=https://api.together.xyz/v1 DG_API_KEY=... DG_MODEL=meta-llama/Llama-3-70b dg generate
@@ -142,7 +161,7 @@ generation:
 
 | Section | Key | Default | Description |
 |---------|-----|---------|-------------|
-| `provider` | `kind` | `openai` | Provider type (openai, ollama, vllm, litellm, together, groq) |
+| `provider` | `kind` | `openai` | Provider type (openai, anthropic, ollama, vllm, litellm, together, groq) |
 | `provider` | `base_url` | `http://localhost:11434/v1` | API endpoint |
 | `provider` | `api_key` | `ollama` | API key |
 | `provider` | `model` | `llama3.1:8b` | Model name |
