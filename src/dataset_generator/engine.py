@@ -56,6 +56,9 @@ def _generate_batch(
     total_input = 0
     total_output = 0
 
+    last_error: str = ""
+    parse_failures = 0
+
     for attempt in range(max_retries + 1):
         try:
             result: CompletionResult = provider.complete(messages, temperature=temperature)
@@ -64,9 +67,29 @@ def _generate_batch(
             samples = task.parse_response(result.content)
             if samples:
                 return samples, total_input, total_output
+            parse_failures += 1
             logger.warning(f"Batch {batch_index}: parsed 0 samples, attempt {attempt + 1}")
         except Exception as e:
+            last_error = str(e)
             logger.warning(f"Batch {batch_index} attempt {attempt + 1} failed: {e}")
+
+    # Emit actionable guidance after all retries exhausted
+    if "onnect" in last_error or "refused" in last_error:
+        logger.error(
+            f"Cannot reach LLM at {provider.client.base_url}. "
+            "Is Ollama/vLLM running? Check base_url and try: curl %s/v1/models",
+            provider.client.base_url,
+        )
+    elif "timed out" in last_error.lower() or "timeout" in last_error.lower():
+        logger.error(
+            "Request timed out. For slow/large models, try: "
+            "--timeout 1200 or lower --num-samples and batch_size in your config."
+        )
+    elif parse_failures >= max_retries:
+        logger.error(
+            "Model responded but output could not be parsed as JSON. "
+            "Try a more capable model, or lower batch_size to reduce output complexity."
+        )
 
     return [], total_input, total_output
 
@@ -99,7 +122,26 @@ def generate(
     strategy_config = gen_config.get("strategy_config", {})
     max_cost = gen_config.get("max_cost")
 
-    provider = create_provider(config.get("provider", {}))
+    # Auto-detect local models and adjust defaults for single-GPU inference
+    provider_config = config.get("provider", {})
+    base_url = provider_config.get("base_url", "")
+    _is_local = any(host in base_url for host in ("localhost", "127.0.0.1", "0.0.0.0"))
+
+    if _is_local:
+        # Only adjust values that weren't explicitly set by the user
+        if "max_workers" not in gen_config:
+            max_workers = 1
+        if "batch_size" not in gen_config:
+            batch_size = 5
+        if "timeout" not in provider_config:
+            provider_config.setdefault("timeout", 600.0)
+        if max_workers == 1 or batch_size < 10:
+            logger.info(
+                f"Local model detected ({base_url}): using max_workers={max_workers}, "
+                f"batch_size={batch_size}"
+            )
+
+    provider = create_provider(provider_config)
     task = create_task(config)
     strategy = create_strategy(strategy_name, config=strategy_config)
 
@@ -177,7 +219,14 @@ def generate(
                 total_input_tokens += in_tok
                 total_output_tokens += out_tok
                 pbar.update(1)
-                pbar.set_postfix(samples=len(all_samples))
+
+                # Rich progress postfix: samples + cost or tokens
+                cost = _estimate_cost(total_input_tokens, total_output_tokens, provider.model)
+                if cost > 0:
+                    pbar.set_postfix(samples=len(all_samples), cost=f"${cost:.4f}")
+                else:
+                    total_tok = total_input_tokens + total_output_tokens
+                    pbar.set_postfix(samples=len(all_samples), tokens=f"{total_tok:,}")
 
                 # Save checkpoint after each batch
                 if checkpoint_mgr and samples:
@@ -235,10 +284,16 @@ def generate(
     all_samples = all_samples[:num_samples]
 
     if len(all_samples) < num_samples:
-        logger.warning(
-            f"Delivered {len(all_samples)} samples (requested {num_samples}). "
-            "Increase overshoot or relax quality filters."
-        )
+        if len(all_samples) == 0:
+            logger.warning(
+                f"Generated 0 samples (requested {num_samples}). "
+                "Check the errors above — likely a connection, timeout, or parsing issue."
+            )
+        else:
+            logger.warning(
+                f"Delivered {len(all_samples)} samples (requested {num_samples}). "
+                "Try increasing num_samples, lowering quality thresholds, or using a different strategy."
+            )
 
     logger.info(f"Final dataset: {len(all_samples)} samples")
 

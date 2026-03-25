@@ -128,6 +128,11 @@ def generate(
     max_cost: float | None = typer.Option(
         None, "--max-cost", help="Budget cap in USD (stops generation when reached)"
     ),
+    timeout: float | None = typer.Option(
+        None,
+        "--timeout",
+        help="Request timeout in seconds (default: 600, increase for slow models)",
+    ),
     resume: bool = typer.Option(False, "--resume", help="Resume from checkpoint if available"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Estimate cost without running"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable debug logging"),
@@ -180,6 +185,8 @@ def generate(
         cfg.setdefault("provider", {})["api_key"] = api_key
     if max_cost is not None:
         cfg.setdefault("generation", {})["max_cost"] = max_cost
+    if timeout is not None:
+        cfg.setdefault("provider", {})["timeout"] = timeout
     if from_docs is not None:
         cfg["from_docs"] = from_docs
 

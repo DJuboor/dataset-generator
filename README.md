@@ -43,6 +43,8 @@ dg generate
 DG_BASE_URL=https://api.together.xyz/v1 DG_API_KEY=... DG_MODEL=meta-llama/Llama-3-70b dg generate
 ```
 
+> **Local models:** When using localhost (Ollama, vLLM), the tool auto-detects and sets `max_workers=1` and `batch_size=5` to avoid overwhelming a single GPU. Override with `--max-workers` / config if you have multi-GPU.
+
 ---
 
 ## 📡 Why This Tool?
@@ -144,6 +146,7 @@ generation:
 | `provider` | `base_url` | `http://localhost:11434/v1` | API endpoint |
 | `provider` | `api_key` | `ollama` | API key |
 | `provider` | `model` | `llama3.1:8b` | Model name |
+| `provider` | `timeout` | `600` | Request timeout in seconds |
 | `generation` | `num_samples` | `100` | Target sample count |
 | `generation` | `batch_size` | `10` | Samples per LLM call |
 | `generation` | `max_workers` | `10` | Parallel requests |

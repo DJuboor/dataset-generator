@@ -28,6 +28,10 @@ generation:
   strategy: direct                          # direct, few_shot, persona, cot, adversarial, evolinstruct
   # max_cost: 5.00                          # optional — budget cap in USD
 
+# Provider tuning (usually auto-detected for local models)
+# provider:
+#   timeout: 600                            # request timeout in seconds (increase for large local models)
+
 # Document grounding (optional — generate from your own docs)
 # from_docs: ./docs                         # path to file or directory (txt, pdf, html)
 
