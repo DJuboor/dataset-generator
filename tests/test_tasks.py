@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from dataset_generator.tasks import create_task
+from dataset_generator.tasks.base import clean_llm_response
 from dataset_generator.tasks.classification import ClassificationTask
 from dataset_generator.tasks.conversation import ConversationTask
 from dataset_generator.tasks.distillation import DistillationTask
@@ -13,6 +14,40 @@ from dataset_generator.tasks.preference import PreferenceTask
 from dataset_generator.tasks.qa import QATask
 from dataset_generator.tasks.sft import SFTTask
 from dataset_generator.tasks.summarization import SummarizationTask
+
+
+class TestCleanLLMResponse:
+    def test_strips_think_tags(self):
+        raw = '<think>\nsome reasoning\n</think>\n[{"text": "hello", "label": "a"}]'
+        assert clean_llm_response(raw) == '[{"text": "hello", "label": "a"}]'
+
+    def test_strips_reasoning_tags(self):
+        raw = '<reasoning>step by step</reasoning>[{"a": 1}]'
+        assert clean_llm_response(raw) == '[{"a": 1}]'
+
+    def test_strips_eos_tokens(self):
+        raw = '[{"a": 1}]<|endoftext|><|im_start|>user\nmore stuff'
+        assert clean_llm_response(raw) == '[{"a": 1}]'
+
+    def test_strips_markdown_code_blocks(self):
+        raw = '```json\n[{"a": 1}]\n```'
+        assert clean_llm_response(raw) == '[{"a": 1}]'
+
+    def test_handles_think_plus_markdown(self):
+        raw = '<think>\nplanning...\n</think>\n```json\n[{"x": 1}]\n```<|endoftext|>'
+        assert clean_llm_response(raw) == '[{"x": 1}]'
+
+    def test_plain_json_unchanged(self):
+        raw = '[{"text": "hello"}]'
+        assert clean_llm_response(raw) == '[{"text": "hello"}]'
+
+    def test_classification_with_think_tags(self):
+        """Integration: a classification task should parse responses with think tags."""
+        task = ClassificationTask(labels=["positive", "negative"])
+        response = '<think>\nLet me generate examples...\n</think>\n[{"text": "Great product!", "label": "positive"}]'
+        samples = task.parse_response(response)
+        assert len(samples) == 1
+        assert samples[0].label == "positive"
 
 
 class TestClassificationTask:

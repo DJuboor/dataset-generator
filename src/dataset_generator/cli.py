@@ -402,9 +402,9 @@ def _build_inline_config(
     max_cost: float | None = None,
 ) -> dict:
     """Build a config dict from CLI flags for inline generation (no YAML needed)."""
-    from dataset_generator.config import DEFAULT_CONFIG, _deep_merge
+    from dataset_generator.config import DEFAULT_CONFIG, _deep_merge, _walk_and_substitute
 
-    cfg = _deep_merge(DEFAULT_CONFIG, {"type": task})
+    cfg = _walk_and_substitute(_deep_merge(DEFAULT_CONFIG, {"type": task}))
 
     # Task config
     task_cfg: dict = {}

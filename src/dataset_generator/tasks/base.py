@@ -2,9 +2,32 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Protocol
 
 from pydantic import BaseModel
+
+
+def clean_llm_response(response: str) -> str:
+    """Clean common LLM output artifacts before JSON parsing.
+
+    Handles: thinking tags (<think>...</think>), markdown code blocks,
+    EOS tokens (<|endoftext|>, <|im_start|>, etc.), and leading/trailing whitespace.
+    """
+    # Strip thinking/reasoning tags (qwen, deepseek, etc.)
+    response = re.sub(r"<think>.*?</think>", "", response, flags=re.DOTALL)
+    response = re.sub(r"<reasoning>.*?</reasoning>", "", response, flags=re.DOTALL)
+
+    # Strip EOS / special tokens
+    response = re.sub(r"<\|[^>]+\|>.*", "", response, flags=re.DOTALL)
+
+    response = response.strip()
+
+    # Strip markdown code blocks
+    if response.startswith("```"):
+        response = response.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+
+    return response
 
 
 class Sample(BaseModel):

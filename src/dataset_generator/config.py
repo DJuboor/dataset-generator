@@ -12,9 +12,9 @@ ENV_VAR_PATTERN = re.compile(r"\$\{(\w+)(?::-(.*?))?\}")
 DEFAULT_CONFIG: dict[str, Any] = {
     "provider": {
         "kind": "openai",
-        "base_url": "http://localhost:11434/v1",
-        "api_key": "ollama",
-        "model": "llama3.1:8b",
+        "base_url": "${DG_BASE_URL:-http://localhost:11434/v1}",
+        "api_key": "${DG_API_KEY:-ollama}",
+        "model": "${DG_MODEL:-llama3.1:8b}",
     },
     "generation": {
         "num_samples": 100,

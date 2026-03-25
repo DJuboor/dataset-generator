@@ -21,5 +21,6 @@ def create_provider(config: dict) -> Provider:
             base_url=config.get("base_url"),
             api_key=config.get("api_key", ""),
             model=config["model"],
+            timeout=config.get("timeout", 600.0),
         )
     raise ValueError(f"Unknown provider kind: {kind}")

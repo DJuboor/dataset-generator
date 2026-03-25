@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 
-from dataset_generator.tasks.base import Sample
+from dataset_generator.tasks.base import Sample, clean_llm_response
 
 logger = logging.getLogger(__name__)
 
@@ -79,10 +79,7 @@ class ClassificationTask:
 
     def parse_response(self, response: str) -> list[Sample]:
         """Parse JSON array of classification samples."""
-        response = response.strip()
-        # Handle markdown code blocks
-        if response.startswith("```"):
-            response = response.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        response = clean_llm_response(response)
 
         try:
             items = json.loads(response)

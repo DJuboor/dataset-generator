@@ -14,9 +14,15 @@ logger = logging.getLogger(__name__)
 class OpenAIProvider:
     """Provider using any OpenAI-compatible API."""
 
-    def __init__(self, model: str, base_url: str | None = None, api_key: str = ""):
+    def __init__(
+        self,
+        model: str,
+        base_url: str | None = None,
+        api_key: str = "",
+        timeout: float = 600.0,
+    ):
         self.model = model
-        self.client = openai.OpenAI(base_url=base_url, api_key=api_key or "no-key")
+        self.client = openai.OpenAI(base_url=base_url, api_key=api_key or "no-key", timeout=timeout)
 
     def _extract_usage(self, response) -> dict[str, int | None]:
         """Extract token usage from API response."""
