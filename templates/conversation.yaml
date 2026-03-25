@@ -1,0 +1,38 @@
+# Dataset Generator — Multi-turn Conversation Task
+
+provider:
+  kind: openai
+  base_url: ${DG_BASE_URL:-http://localhost:11434/v1}
+  api_key: ${DG_API_KEY:-ollama}
+  model: ${DG_MODEL:-llama3.1:8b}
+
+type: conversation
+task:
+  domain: "customer support"               # optional — conversation topic domain
+  system_prompt: ""                        # optional — system prompt for the assistant
+  min_turns: 2                             # minimum user-assistant exchange pairs
+  max_turns: 6                             # maximum user-assistant exchange pairs
+
+generation:
+  num_samples: 50
+  batch_size: 3                            # lower batch size (multi-turn is token-heavy)
+  max_workers: 10
+  max_retries: 3
+  temperature: 0.8
+  strategy: persona                        # persona works well for conversation diversity
+  # max_cost: 5.00                         # optional — budget cap in USD
+
+# from_docs: ./docs                        # optional — ground conversations on your documents
+
+quality:
+  similarity_threshold: 0.85
+  min_length: 20
+  max_length: 20000
+  # steps:                                 # optional — additional quality pipeline
+  #   - pii: {action: remove}
+  #   - language: {expected: en, action: remove}
+  #   - toxicity: {action: flag}
+
+output:
+  path: data/conversation_output.jsonl
+  format: jsonl                            # jsonl, csv, parquet, huggingface, openai, sharegpt

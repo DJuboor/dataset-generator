@@ -1,0 +1,37 @@
+# Dataset Generator — Knowledge Distillation Task
+
+provider:
+  kind: openai
+  base_url: ${DG_BASE_URL:-http://localhost:11434/v1}
+  api_key: ${DG_API_KEY:-ollama}
+  model: ${DG_MODEL:-llama3.1:8b}
+
+type: distillation
+task:
+  domain: "general"                        # optional — focus area
+  teacher_style: step_by_step             # detailed, concise, step_by_step
+  complexity: mixed                        # easy, medium, hard, mixed
+
+generation:
+  num_samples: 100
+  batch_size: 3
+  max_workers: 10
+  max_retries: 3
+  temperature: 0.7
+  strategy: cot                            # cot is natural for distillation (also: direct, few_shot, persona, adversarial, evolinstruct)
+  # max_cost: 5.00                         # optional — budget cap in USD
+
+# from_docs: ./docs                        # optional — distill knowledge from your documents
+
+quality:
+  similarity_threshold: 0.85
+  min_length: 30
+  max_length: 10000
+  # steps:
+  #   - pii: {action: remove}
+  #   - language: {expected: en, action: remove}
+  #   - diversity: {}
+
+output:
+  path: data/distillation_output.jsonl
+  format: jsonl                            # jsonl, csv, parquet, huggingface, openai, alpaca, sharegpt

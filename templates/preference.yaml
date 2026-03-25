@@ -1,0 +1,36 @@
+# Dataset Generator — Preference Pairs (DPO/RLHF)
+
+provider:
+  kind: openai
+  base_url: ${DG_BASE_URL:-http://localhost:11434/v1}
+  api_key: ${DG_API_KEY:-ollama}
+  model: ${DG_MODEL:-llama3.1:8b}
+
+type: preference
+task:
+  domain: "coding assistant"
+  criteria: "accuracy, helpfulness, and code quality"
+
+generation:
+  num_samples: 100
+  batch_size: 5
+  max_workers: 10
+  max_retries: 3
+  temperature: 0.8
+  strategy: direct                         # direct, few_shot, persona, cot, adversarial, evolinstruct
+  # max_cost: 5.00                         # optional — budget cap in USD
+
+# from_docs: ./docs                        # optional — ground preference pairs on your documents
+
+quality:
+  similarity_threshold: 0.80
+  min_length: 20
+  max_length: 10000
+  # steps:
+  #   - pii: {action: remove}
+  #   - toxicity: {action: remove}
+  #   - diversity: {}
+
+output:
+  path: data/preference_output.jsonl
+  format: jsonl                            # jsonl, csv, parquet, huggingface

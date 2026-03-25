@@ -1,0 +1,37 @@
+# Dataset Generator — Summarization Task
+
+provider:
+  kind: openai
+  base_url: ${DG_BASE_URL:-http://localhost:11434/v1}
+  api_key: ${DG_API_KEY:-ollama}
+  model: ${DG_MODEL:-llama3.1:8b}
+
+type: summarization
+task:
+  domain: "news articles"                  # optional — what kind of documents to generate
+  min_doc_length: 200                      # minimum document length (chars)
+  max_doc_length: 1000                     # maximum document length (chars)
+  summary_style: abstractive              # abstractive, extractive, mixed
+
+generation:
+  num_samples: 100
+  batch_size: 3
+  max_workers: 10
+  max_retries: 3
+  temperature: 0.7
+  strategy: direct                         # direct, few_shot, persona, cot, adversarial, evolinstruct
+  # max_cost: 5.00                         # optional — budget cap in USD
+
+# from_docs: ./docs                        # optional — summarize your own documents
+
+quality:
+  similarity_threshold: 0.85
+  min_length: 50
+  max_length: 5000
+  # steps:
+  #   - language: {expected: en, action: remove}
+  #   - diversity: {}
+
+output:
+  path: data/summarization_output.jsonl
+  format: jsonl                            # jsonl, csv, parquet, huggingface

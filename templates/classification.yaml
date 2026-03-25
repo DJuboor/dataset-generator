@@ -1,0 +1,49 @@
+# Dataset Generator — Classification Task
+# Docs: https://github.com/datajuboor/dataset-generator
+
+# LLM provider (works with OpenAI, Ollama, vLLM, LiteLLM, Together, Groq)
+provider:
+  kind: openai                              # any OpenAI-compatible API
+  base_url: ${DG_BASE_URL:-http://localhost:11434/v1}
+  api_key: ${DG_API_KEY:-ollama}
+  model: ${DG_MODEL:-llama3.1:8b}
+
+# Task definition
+type: classification
+task:
+  labels: ["positive", "negative", "neutral"]
+  domain: "product reviews"                 # optional — helps LLM generate relevant text
+  label_descriptions:                       # optional — improves label accuracy
+    positive: "Customer expresses satisfaction or praise"
+    negative: "Customer expresses dissatisfaction or complaint"
+    neutral: "Factual statement without strong sentiment"
+
+# Generation settings
+generation:
+  num_samples: 100
+  batch_size: 10                            # samples per LLM call
+  max_workers: 10                           # parallel LLM requests
+  max_retries: 3
+  temperature: 0.7
+  strategy: direct                          # direct, few_shot, persona, cot, adversarial, evolinstruct
+  # max_cost: 5.00                          # optional — budget cap in USD
+
+# Document grounding (optional — generate from your own docs)
+# from_docs: ./docs                         # path to file or directory (txt, pdf, html)
+
+# Quality filters (applied after generation)
+quality:
+  similarity_threshold: 0.85                # fuzzy dedup threshold (0-1)
+  min_length: 10
+  max_length: 10000
+  # steps:                                  # optional — additional quality pipeline steps
+  #   - pii: {action: remove}              # detect and remove PII (email, phone, ssn)
+  #   - language: {expected: en, action: remove}  # filter non-English samples
+  #   - toxicity: {action: flag}           # flag toxic content
+  #   - balance: {strategy: undersample, max_ratio: 3.0}  # fix label imbalance
+  #   - diversity: {}                      # report diversity metrics
+
+# Output
+output:
+  path: data/output.jsonl
+  format: jsonl                             # jsonl, csv, parquet, huggingface, openai, alpaca, sharegpt
