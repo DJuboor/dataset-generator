@@ -151,7 +151,7 @@ def generate_card(
         [
             "---",
             "",
-            "*Generated with [dataset-generator](https://github.com/datajuboor/dataset-generator)*",
+            "*Generated with [dataset-generator](https://github.com/DJuboor/dataset-generator)*",
         ]
     )
 

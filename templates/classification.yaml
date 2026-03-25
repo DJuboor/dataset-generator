@@ -1,5 +1,5 @@
 # Dataset Generator — Classification Task
-# Docs: https://github.com/datajuboor/dataset-generator
+# Docs: https://github.com/DJuboor/dataset-generator
 
 # LLM provider (works with OpenAI, Ollama, vLLM, LiteLLM, Together, Groq)
 provider:
