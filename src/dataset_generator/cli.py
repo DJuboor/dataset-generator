@@ -217,7 +217,19 @@ def generate(
         console.print("\nRun without --dry-run to proceed.")
         return
 
-    samples = run_generate(config=cfg, resume=resume)
+    # Auto-select async for remote providers (better throughput for cloud APIs)
+    base_url = cfg.get("provider", {}).get("base_url", "")
+    is_local = any(h in base_url for h in ("localhost", "127.0.0.1", "0.0.0.0"))
+
+    if not is_local and cfg.get("generation", {}).get("max_workers", 10) > 1:
+        import asyncio
+
+        from dataset_generator.engine import async_generate
+
+        samples = asyncio.run(async_generate(config=cfg, resume=resume))
+    else:
+        samples = run_generate(config=cfg, resume=resume)
+
     output_path = cfg.get("output", {}).get("path", "data/output.jsonl")
     console.print(f"\n[green]Generated {len(samples)} samples → {output_path}[/green]")
 

@@ -33,6 +33,7 @@ class AnthropicProvider:
         self.model = model
         self.max_tokens = max_tokens
         self.client = anthropic.Anthropic(api_key=api_key or None, timeout=timeout)
+        self.async_client = anthropic.AsyncAnthropic(api_key=api_key or None, timeout=timeout)
 
     def complete(
         self,
@@ -51,6 +52,29 @@ class AnthropicProvider:
             max_tokens=max_tokens or self.max_tokens,
         )
 
+        content = response.content[0].text if response.content else ""
+        return CompletionResult(
+            content=content,
+            model=self.model,
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+        )
+
+    async def async_complete(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+    ) -> CompletionResult:
+        """Async completion via AsyncAnthropic."""
+        system, user_messages = _split_system(messages)
+        response = await self.async_client.messages.create(
+            model=self.model,
+            system=system,
+            messages=user_messages,
+            temperature=temperature,
+            max_tokens=max_tokens or self.max_tokens,
+        )
         content = response.content[0].text if response.content else ""
         return CompletionResult(
             content=content,

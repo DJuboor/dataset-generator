@@ -4,6 +4,7 @@ from dataset_generator.quality.balance import BalanceChecker
 from dataset_generator.quality.dedup import deduplicate
 from dataset_generator.quality.diversity import DiversityReporter
 from dataset_generator.quality.language import LanguageFilter
+from dataset_generator.quality.llm_judge import LLMJudge
 from dataset_generator.quality.pii import PIIFilter
 from dataset_generator.quality.pipeline import (
     QualityPipeline,
@@ -17,6 +18,7 @@ from dataset_generator.quality.validate import validate_samples
 __all__ = [
     "BalanceChecker",
     "DiversityReporter",
+    "LLMJudge",
     "LanguageFilter",
     "PIIFilter",
     "QualityPipeline",

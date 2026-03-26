@@ -1,5 +1,6 @@
 """Provider protocol — the only interface tasks interact with."""
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -43,6 +44,15 @@ class Provider(Protocol):
             CompletionResult with content and optional usage stats.
         """
         ...
+
+    async def async_complete(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+    ) -> CompletionResult:
+        """Async version of complete(). Default wraps sync in a thread."""
+        return await asyncio.to_thread(self.complete, messages, temperature, max_tokens)
 
     def complete_json(
         self,

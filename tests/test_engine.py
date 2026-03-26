@@ -545,6 +545,39 @@ class TestQualityPipelineConfig:
         assert len(samples) > 0
 
 
+class TestAsyncGenerate:
+    @patch("dataset_generator.engine.create_provider")
+    def test_async_full_pipeline(self, mock_create_provider, tmp_path):
+        """async_generate() should produce samples just like sync generate()."""
+        import asyncio
+
+        from dataset_generator.engine import async_generate
+
+        content = _valid_json_response(5)
+        mock_provider = _mock_provider()
+        mock_provider.complete.return_value = CompletionResult(
+            content=content, input_tokens=100, output_tokens=200
+        )
+        # async_complete falls back to sync via asyncio.to_thread
+        mock_provider.async_complete = MagicMock(
+            return_value=CompletionResult(content=content, input_tokens=100, output_tokens=200)
+        )
+
+        # Make async_complete a coroutine
+        async def _async_complete(*args, **kwargs):
+            return CompletionResult(content=content, input_tokens=100, output_tokens=200)
+
+        mock_provider.async_complete = _async_complete
+        mock_create_provider.return_value = mock_provider
+
+        config = _make_classification_config(tmp_path)
+        samples = asyncio.run(async_generate(config=config))
+
+        assert len(samples) > 0
+        assert all(isinstance(s, Sample) for s in samples)
+        assert (tmp_path / "output.jsonl").exists()
+
+
 class TestBuildQualityPipeline:
     def test_builds_known_steps(self):
         from dataset_generator.engine import _build_quality_pipeline

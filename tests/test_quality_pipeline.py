@@ -366,3 +366,72 @@ class TestLanguageFilter:
         _, report = filt.process(samples)
 
         assert "language_distribution" in report.details
+
+
+# ---------------------------------------------------------------------------
+# LLMJudge
+# ---------------------------------------------------------------------------
+
+
+class TestLLMJudge:
+    def test_scores_and_filters(self):
+        from unittest.mock import MagicMock
+
+        from dataset_generator.providers.base import CompletionResult
+        from dataset_generator.quality.llm_judge import LLMJudge
+
+        judge = LLMJudge(model="gpt-4o", threshold=3.0, action="remove")
+        # Mock the provider creation
+        mock_provider = MagicMock()
+        mock_provider.complete.return_value = CompletionResult(
+            content='[{"index": 0, "score": 4.5}, {"index": 1, "score": 2.0}]',
+            input_tokens=50,
+            output_tokens=20,
+        )
+
+        from unittest.mock import patch
+
+        with patch(
+            "dataset_generator.quality.llm_judge.create_provider", return_value=mock_provider
+        ):
+            samples = [_make_sample("Good sample"), _make_sample("Bad sample")]
+            result, report = judge.process(samples)
+
+        assert len(result) == 1  # Only the 4.5 score passes threshold 3.0
+        assert report.removed == 1
+
+    def test_flag_action_keeps_with_score(self):
+        from unittest.mock import MagicMock, patch
+
+        from dataset_generator.providers.base import CompletionResult
+        from dataset_generator.quality.llm_judge import LLMJudge
+
+        judge = LLMJudge(model="gpt-4o", threshold=3.0, action="flag")
+        mock_provider = MagicMock()
+        mock_provider.complete.return_value = CompletionResult(
+            content='[{"index": 0, "score": 2.0}]',
+            input_tokens=10,
+            output_tokens=10,
+        )
+
+        with patch(
+            "dataset_generator.quality.llm_judge.create_provider", return_value=mock_provider
+        ):
+            samples = [_make_sample("Mediocre sample")]
+            result, report = judge.process(samples)
+
+        assert len(result) == 1
+        assert report.flagged == 1
+        assert "judge_score" in result[0].metadata
+
+    def test_invalid_action_raises(self):
+        with pytest.raises(ValueError, match="Invalid action"):
+            from dataset_generator.quality.llm_judge import LLMJudge
+
+            LLMJudge(model="gpt-4o", action="explode")
+
+    def test_requires_model_or_config(self):
+        with pytest.raises(ValueError, match="requires"):
+            from dataset_generator.quality.llm_judge import LLMJudge
+
+            LLMJudge()

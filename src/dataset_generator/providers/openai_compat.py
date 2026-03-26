@@ -23,6 +23,9 @@ class OpenAIProvider:
     ):
         self.model = model
         self.client = openai.OpenAI(base_url=base_url, api_key=api_key or "no-key", timeout=timeout)
+        self.async_client = openai.AsyncOpenAI(
+            base_url=base_url, api_key=api_key or "no-key", timeout=timeout
+        )
 
     def _extract_usage(self, response) -> dict[str, int | None]:
         """Extract token usage from API response."""
@@ -50,6 +53,26 @@ class OpenAIProvider:
             kwargs["max_tokens"] = max_tokens
 
         response = self.client.chat.completions.create(**kwargs)
+        content = response.choices[0].message.content or ""
+        usage = self._extract_usage(response)
+        return CompletionResult(content=content, model=self.model, **usage)
+
+    async def async_complete(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+    ) -> CompletionResult:
+        """Async text completion using AsyncOpenAI."""
+        kwargs: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature,
+        }
+        if max_tokens is not None:
+            kwargs["max_tokens"] = max_tokens
+
+        response = await self.async_client.chat.completions.create(**kwargs)
         content = response.choices[0].message.content or ""
         usage = self._extract_usage(response)
         return CompletionResult(content=content, model=self.model, **usage)

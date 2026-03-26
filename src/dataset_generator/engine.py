@@ -359,6 +359,222 @@ def generate(
     return all_samples
 
 
+# ---------------------------------------------------------------------------
+# Async generation (for remote/cloud providers)
+# ---------------------------------------------------------------------------
+
+
+async def _async_generate_batch(
+    provider,
+    task,
+    strategy,
+    batch_index: int,
+    batch_size: int,
+    temperature: float,
+    max_retries: int,
+    doc_contexts: list[str] | None = None,
+    language: str | None = None,
+) -> tuple[list[Sample], int, int]:
+    """Async version of _generate_batch."""
+    messages = task.build_messages(batch_size=batch_size)
+    messages = strategy.apply(messages, batch_index)
+
+    if language:
+        from dataset_generator.tasks.base import LANGUAGE_NAMES
+
+        lang_name = LANGUAGE_NAMES.get(language, language)
+        for msg in messages:
+            if msg["role"] == "user":
+                msg["content"] += (
+                    f"\n\nIMPORTANT: Generate ALL text content in {lang_name}. "
+                    f"Every example must be written entirely in {lang_name}."
+                )
+                break
+
+    if doc_contexts:
+        window_size = min(3, len(doc_contexts))
+        start = (batch_index * window_size) % len(doc_contexts)
+        batch_docs = [doc_contexts[(start + i) % len(doc_contexts)] for i in range(window_size)]
+        context_block = "\n\n---\n\n".join(batch_docs)
+        for msg in messages:
+            if msg["role"] == "user":
+                msg["content"] += (
+                    "\n\nBase your generation on these reference documents:\n\n" + context_block
+                )
+                break
+
+    total_input = 0
+    total_output = 0
+
+    for attempt in range(max_retries + 1):
+        try:
+            result: CompletionResult = await provider.async_complete(
+                messages, temperature=temperature
+            )
+            total_input += result.input_tokens or 0
+            total_output += result.output_tokens or 0
+            samples = task.parse_response(result.content)
+            if samples and hasattr(task, "required_keys"):
+                required = task.required_keys()
+                samples = [s for s in samples if validate_sample_schema(s.to_dict(), required)]
+            if samples:
+                return samples, total_input, total_output
+            logger.warning(f"Batch {batch_index}: parsed 0 samples, attempt {attempt + 1}")
+        except Exception as e:
+            logger.warning(f"Batch {batch_index} attempt {attempt + 1} failed: {e}")
+
+    return [], total_input, total_output
+
+
+async def async_generate(
+    config: dict[str, Any] | None = None,
+    config_path: str | None = None,
+    resume: bool = False,
+) -> list[Sample]:
+    """Async generation pipeline — uses asyncio for concurrent API calls.
+
+    Same interface and behavior as generate(), but uses async I/O for
+    better throughput with cloud providers.
+    """
+    import asyncio
+
+    if config is None:
+        config = load_config(config_path)
+
+    gen_config = config.get("generation", {})
+    num_samples = gen_config.get("num_samples", 100)
+    max_workers = gen_config.get("max_workers", 10)
+    max_retries = gen_config.get("max_retries", 3)
+    temperature = gen_config.get("temperature", 0.7)
+    batch_size = gen_config.get("batch_size", 10)
+    strategy_name = gen_config.get("strategy", "direct")
+    strategy_config = gen_config.get("strategy_config", {})
+    max_cost = gen_config.get("max_cost")
+
+    provider_config = config.get("provider", {})
+    provider = create_provider(provider_config)
+    task = create_task(config)
+
+    seed_from = config.get("seed_from")
+    if seed_from:
+        from dataset_generator.formats import read_samples
+
+        seed_samples = read_samples(seed_from)
+        seed_dicts = [s.to_dict() for s in seed_samples]
+        if strategy_name == "direct":
+            strategy_name = "few_shot"
+        strategy_config["examples"] = seed_dicts
+
+    strategy = create_strategy(strategy_name, config=strategy_config)
+    language = config.get("language")
+
+    doc_contexts: list[str] | None = None
+    from_docs = config.get("from_docs")
+    if from_docs:
+        from dataset_generator.loaders import load_documents
+
+        chunks = load_documents(from_docs, chunk_size=1000, chunk_overlap=200)
+        if chunks:
+            doc_contexts = [chunk.text for chunk in chunks]
+
+    overshoot = 1.2
+    total_needed = math.ceil(num_samples * overshoot)
+    num_batches = math.ceil(total_needed / batch_size)
+
+    logger.info(
+        f"Async generating {num_samples} samples ({num_batches} batches of {batch_size}, "
+        f"concurrency={max_workers}, strategy={strategy_name})"
+    )
+
+    all_samples: list[Sample] = []
+    total_input_tokens = 0
+    total_output_tokens = 0
+    semaphore = asyncio.Semaphore(max_workers)
+    budget_exceeded = False
+
+    async def _run_batch(batch_idx: int) -> tuple[list[Sample], int, int]:
+        nonlocal budget_exceeded
+        if budget_exceeded:
+            return [], 0, 0
+        async with semaphore:
+            return await _async_generate_batch(
+                provider,
+                task,
+                strategy,
+                batch_idx,
+                batch_size,
+                temperature,
+                max_retries,
+                doc_contexts,
+                language,
+            )
+
+    with tqdm(total=num_batches, desc="Generating (async)", unit="batch") as pbar:
+        tasks = [_run_batch(i) for i in range(num_batches)]
+        for coro in asyncio.as_completed(tasks):
+            samples, in_tok, out_tok = await coro
+            all_samples.extend(samples)
+            total_input_tokens += in_tok
+            total_output_tokens += out_tok
+            pbar.update(1)
+
+            cost = _estimate_cost(total_input_tokens, total_output_tokens, provider.model)
+            if cost > 0:
+                pbar.set_postfix(samples=len(all_samples), cost=f"${cost:.4f}")
+            else:
+                pbar.set_postfix(
+                    samples=len(all_samples), tokens=f"{total_input_tokens + total_output_tokens:,}"
+                )
+
+            if max_cost and cost >= max_cost:
+                logger.warning(f"Budget cap ${max_cost} reached, stopping generation")
+                budget_exceeded = True
+                break
+
+    logger.info(f"Raw samples: {len(all_samples)}")
+
+    # Quality pipeline (same as sync)
+    quality_config = config.get("quality", {})
+    all_samples = deduplicate(
+        all_samples, similarity_threshold=quality_config.get("similarity_threshold", 0.85)
+    )
+
+    allowed_labels = None
+    task_config = config.get("task", {})
+    if "labels" in task_config:
+        labels = task_config["labels"]
+        allowed_labels = (
+            [lbl.strip() for lbl in labels.split(",")] if isinstance(labels, str) else labels
+        )
+
+    all_samples = validate_samples(
+        all_samples,
+        min_length=quality_config.get("min_length", 10),
+        max_length=quality_config.get("max_length", 10000),
+        allowed_labels=allowed_labels,
+    )
+
+    quality_steps_config = quality_config.get("steps", [])
+    if language and not any("language" in step for step in quality_steps_config):
+        quality_steps_config = [{"language": {"expected": language}}, *quality_steps_config]
+
+    if quality_steps_config:
+        pipeline = _build_quality_pipeline(quality_steps_config)
+        all_samples, _ = pipeline.run(all_samples)
+
+    all_samples = all_samples[:num_samples]
+    logger.info(f"Final dataset: {len(all_samples)} samples")
+
+    output_config = config.get("output", {})
+    write_output(
+        all_samples,
+        output_config.get("path", "data/output.jsonl"),
+        fmt=output_config.get("format", "jsonl"),
+    )
+
+    return all_samples
+
+
 def estimate_run(config: dict[str, Any]) -> dict[str, Any]:
     """Estimate cost and tokens for a generation run without executing it.
 
@@ -428,6 +644,7 @@ def _build_quality_pipeline(steps_config: list[dict]) -> QualityPipeline:
         BalanceChecker,
         DiversityReporter,
         LanguageFilter,
+        LLMJudge,
         PIIFilter,
         QualityPipeline,
         ToxicityFilter,
@@ -439,6 +656,7 @@ def _build_quality_pipeline(steps_config: list[dict]) -> QualityPipeline:
         "toxicity": lambda cfg: ToxicityFilter(**cfg),
         "balance": lambda cfg: BalanceChecker(**cfg),
         "diversity": lambda cfg: DiversityReporter(**cfg),
+        "llm_judge": lambda cfg: LLMJudge(**cfg),
     }
 
     steps = []
