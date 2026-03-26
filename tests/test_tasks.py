@@ -535,6 +535,46 @@ class TestDistillationTask:
         assert self.task.parse_response(response) == []
 
 
+class TestRequiredKeys:
+    def test_classification_keys(self):
+        task = ClassificationTask(labels=["a", "b"])
+        assert task.required_keys() == {"text", "label"}
+
+    def test_ner_keys(self):
+        task = NERTask(entity_types=["PERSON"])
+        assert task.required_keys() == {"text"}
+
+    def test_qa_keys(self):
+        task = QATask()
+        assert task.required_keys() == {"text", "label"}
+
+    def test_sft_keys(self):
+        task = SFTTask()
+        assert "instruction" in task.required_keys()
+        assert "response" in task.required_keys()
+
+    def test_conversation_keys(self):
+        task = ConversationTask()
+        assert "messages" in task.required_keys()
+
+
+class TestValidateSampleSchema:
+    def test_valid(self):
+        from dataset_generator.tasks.base import validate_sample_schema
+
+        assert validate_sample_schema({"text": "hi", "label": "a"}, {"text", "label"})
+
+    def test_missing_key(self):
+        from dataset_generator.tasks.base import validate_sample_schema
+
+        assert not validate_sample_schema({"text": "hi"}, {"text", "label"})
+
+    def test_empty_value(self):
+        from dataset_generator.tasks.base import validate_sample_schema
+
+        assert not validate_sample_schema({"text": "", "label": "a"}, {"text", "label"})
+
+
 class TestCreateTask:
     def test_creates_classification(self):
         task = create_task({"type": "classification", "task": {"labels": ["a", "b"]}})

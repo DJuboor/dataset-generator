@@ -51,6 +51,9 @@ class SummarizationTask:
         self.max_doc_length = max_doc_length
         self.summary_style = summary_style
 
+    def required_keys(self) -> set[str]:
+        return {"text", "label"}
+
     @classmethod
     def from_config(cls, config: dict) -> SummarizationTask:
         """Create from config dict."""

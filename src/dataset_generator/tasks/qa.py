@@ -37,6 +37,9 @@ class QATask:
         self.domain = domain
         self.contexts = contexts
 
+    def required_keys(self) -> set[str]:
+        return {"text", "label"}
+
     @classmethod
     def from_config(cls, config: dict) -> QATask:
         task_config = config.get("task", config)

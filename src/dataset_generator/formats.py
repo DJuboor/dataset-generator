@@ -204,6 +204,14 @@ def write_output(samples: list[Sample], path: str | Path, fmt: str = "jsonl") ->
     WRITERS[fmt](samples, path)
 
 
+def read_samples(path: str | Path) -> list[Sample]:
+    """Read samples from JSONL or CSV based on file extension."""
+    path = Path(path)
+    if path.suffix.lower() == ".csv":
+        return read_csv(path)
+    return read_jsonl(path)
+
+
 def read_jsonl(path: str | Path) -> list[Sample]:
     """Read samples from a JSONL file. Handles both flat and nested metadata formats."""
     samples = []
@@ -219,4 +227,17 @@ def read_jsonl(path: str | Path) -> list[Sample]:
                 # Any remaining top-level keys are flattened task-specific fields
                 metadata.update(data)
                 samples.append(Sample(text=text, label=label, metadata=metadata))
+    return samples
+
+
+def read_csv(path: str | Path) -> list[Sample]:
+    """Read samples from a CSV file."""
+    samples = []
+    with open(path) as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            text = row.pop("text", "")
+            label = row.pop("label", None)
+            metadata = {k: v for k, v in row.items() if v}
+            samples.append(Sample(text=text, label=label, metadata=metadata))
     return samples

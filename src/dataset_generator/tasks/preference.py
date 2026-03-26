@@ -41,6 +41,9 @@ class PreferenceTask:
         self.domain = domain
         self.criteria = criteria
 
+    def required_keys(self) -> set[str]:
+        return {"text", "chosen", "rejected"}
+
     @classmethod
     def from_config(cls, config: dict) -> PreferenceTask:
         task_config = config.get("task", config)

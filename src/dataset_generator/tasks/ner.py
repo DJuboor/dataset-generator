@@ -40,6 +40,9 @@ class NERTask:
         self.entity_types = entity_types
         self.domain = domain
 
+    def required_keys(self) -> set[str]:
+        return {"text"}
+
     @classmethod
     def from_config(cls, config: dict) -> NERTask:
         task_config = config.get("task", config)

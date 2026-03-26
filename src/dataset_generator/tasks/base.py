@@ -7,6 +7,27 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel
 
+LANGUAGE_NAMES: dict[str, str] = {
+    "en": "English",
+    "es": "Spanish",
+    "fr": "French",
+    "de": "German",
+    "pt": "Portuguese",
+    "it": "Italian",
+    "ru": "Russian",
+    "zh": "Chinese",
+    "ja": "Japanese",
+    "ko": "Korean",
+    "ar": "Arabic",
+    "hi": "Hindi",
+    "nl": "Dutch",
+    "sv": "Swedish",
+    "pl": "Polish",
+    "tr": "Turkish",
+    "vi": "Vietnamese",
+    "th": "Thai",
+}
+
 
 def clean_llm_response(response: str) -> str:
     """Clean common LLM output artifacts before JSON parsing.
@@ -53,12 +74,24 @@ class Sample(BaseModel):
         return d
 
 
+def validate_sample_schema(sample_dict: dict, required_keys: set[str]) -> bool:
+    """Validate a sample dict has all required keys with non-empty values."""
+    return all(k in sample_dict and sample_dict[k] for k in required_keys)
+
+
 class Task(Protocol):
     """Protocol for dataset generation tasks."""
 
     @classmethod
     def from_config(cls, config: dict) -> Task:
         """Create task from config dict."""
+        ...
+
+    def required_keys(self) -> set[str]:
+        """Return the set of required keys for this task's output samples.
+
+        Used for schema validation after parsing. Default: {"text"}.
+        """
         ...
 
     def build_messages(self, batch_size: int = 1) -> list[dict[str, str]]:

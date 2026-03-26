@@ -45,6 +45,9 @@ class ClassificationTask:
         self.domain = domain
         self.label_descriptions = label_descriptions or {}
 
+    def required_keys(self) -> set[str]:
+        return {"text", "label"}
+
     @classmethod
     def from_config(cls, config: dict) -> ClassificationTask:
         """Create from config dict."""

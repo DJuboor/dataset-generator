@@ -241,6 +241,49 @@ class TestHuggingFaceParquet:
             write_parquet([Sample(text="test")], tmp_path / "out.parquet")
 
 
+class TestReadCSV:
+    def test_read_csv(self, tmp_path):
+        from dataset_generator.formats import read_csv
+
+        path = tmp_path / "data.csv"
+        path.write_text("text,label\nhello,a\nworld,b\n")
+
+        samples = read_csv(path)
+        assert len(samples) == 2
+        assert samples[0].text == "hello"
+        assert samples[0].label == "a"
+
+    def test_read_csv_with_extra_fields(self, tmp_path):
+        from dataset_generator.formats import read_csv
+
+        path = tmp_path / "data.csv"
+        path.write_text("text,label,source\nhello,a,web\n")
+
+        samples = read_csv(path)
+        assert samples[0].metadata == {"source": "web"}
+
+
+class TestReadSamples:
+    def test_dispatches_jsonl(self, tmp_path):
+        from dataset_generator.formats import read_samples
+
+        path = tmp_path / "data.jsonl"
+        path.write_text('{"text": "hi", "label": "a"}\n')
+
+        samples = read_samples(path)
+        assert len(samples) == 1
+
+    def test_dispatches_csv(self, tmp_path):
+        from dataset_generator.formats import read_samples
+
+        path = tmp_path / "data.csv"
+        path.write_text("text,label\nhello,a\n")
+
+        samples = read_samples(path)
+        assert len(samples) == 1
+        assert samples[0].text == "hello"
+
+
 class TestReadJSONL:
     def test_handles_blank_lines(self, tmp_path):
         path = tmp_path / "blanks.jsonl"

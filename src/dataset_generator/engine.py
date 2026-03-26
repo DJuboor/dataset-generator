@@ -16,7 +16,7 @@ from dataset_generator.providers.base import CompletionResult
 from dataset_generator.quality import QualityPipeline, deduplicate, validate_samples
 from dataset_generator.strategies import create_strategy
 from dataset_generator.tasks import create_task
-from dataset_generator.tasks.base import Sample
+from dataset_generator.tasks.base import Sample, validate_sample_schema
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,7 @@ def _generate_batch(
     temperature: float,
     max_retries: int,
     doc_contexts: list[str] | None = None,
+    language: str | None = None,
 ) -> tuple[list[Sample], int, int]:
     """Generate a single batch with retries.
 
@@ -38,6 +39,19 @@ def _generate_batch(
     """
     messages = task.build_messages(batch_size=batch_size)
     messages = strategy.apply(messages, batch_index)
+
+    # Inject language instruction
+    if language:
+        from dataset_generator.tasks.base import LANGUAGE_NAMES
+
+        lang_name = LANGUAGE_NAMES.get(language, language)
+        for msg in messages:
+            if msg["role"] == "user":
+                msg["content"] += (
+                    f"\n\nIMPORTANT: Generate ALL text content in {lang_name}. "
+                    f"Every example must be written entirely in {lang_name}."
+                )
+                break
 
     # Inject document context for grounded generation
     if doc_contexts:
@@ -65,6 +79,16 @@ def _generate_batch(
             total_input += result.input_tokens or 0
             total_output += result.output_tokens or 0
             samples = task.parse_response(result.content)
+            # Schema validation: drop samples missing required keys
+            if samples and hasattr(task, "required_keys"):
+                required = task.required_keys()
+                valid = [s for s in samples if validate_sample_schema(s.to_dict(), required)]
+                if len(valid) < len(samples):
+                    logger.debug(
+                        f"Batch {batch_index}: schema validation dropped "
+                        f"{len(samples) - len(valid)}/{len(samples)} samples"
+                    )
+                samples = valid
             if samples:
                 return samples, total_input, total_output
             parse_failures += 1
@@ -143,7 +167,24 @@ def generate(
 
     provider = create_provider(provider_config)
     task = create_task(config)
+
+    # Load seed examples for few-shot bootstrapping
+    seed_from = config.get("seed_from")
+    if seed_from:
+        from dataset_generator.formats import read_samples
+
+        seed_samples = read_samples(seed_from)
+        seed_dicts = [s.to_dict() for s in seed_samples]
+        logger.info(f"Loaded {len(seed_dicts)} seed examples from {seed_from}")
+        if strategy_name == "direct":
+            strategy_name = "few_shot"
+            logger.info("Auto-switching strategy to few_shot (seed examples provided)")
+        strategy_config["examples"] = seed_dicts
+
     strategy = create_strategy(strategy_name, config=strategy_config)
+
+    # Multi-language generation
+    language = config.get("language")
 
     # Load documents for grounded generation
     doc_contexts: list[str] | None = None
@@ -207,6 +248,7 @@ def generate(
                 temperature,
                 max_retries,
                 doc_contexts,
+                language,
             ): i
             for i in remaining_batches
         }
@@ -271,8 +313,15 @@ def generate(
         allowed_labels=allowed_labels,
     )
 
-    # Run additional quality steps if configured
+    # Auto-inject language filter when --language is set
     quality_steps_config = quality_config.get("steps", [])
+    if language:
+        has_language_step = any("language" in step for step in quality_steps_config)
+        if not has_language_step:
+            quality_steps_config = [{"language": {"expected": language}}, *quality_steps_config]
+            logger.info(f"Auto-added language filter (expected={language})")
+
+    # Run additional quality steps if configured
     if quality_steps_config:
         pipeline = _build_quality_pipeline(quality_steps_config)
         all_samples, quality_report = pipeline.run(all_samples)

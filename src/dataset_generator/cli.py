@@ -125,6 +125,12 @@ def generate(
     from_docs: str | None = typer.Option(
         None, "--from-docs", help="Path to docs directory/file for grounded generation"
     ),
+    seed_from: str | None = typer.Option(
+        None, "--seed-from", help="Path to JSONL/CSV file to use as few-shot seed examples"
+    ),
+    language: str | None = typer.Option(
+        None, "--language", help="Generate in this language (e.g. es, fr, de, zh, ja)"
+    ),
     max_cost: float | None = typer.Option(
         None, "--max-cost", help="Budget cap in USD (stops generation when reached)"
     ),
@@ -189,6 +195,10 @@ def generate(
         cfg.setdefault("provider", {})["timeout"] = timeout
     if from_docs is not None:
         cfg["from_docs"] = from_docs
+    if seed_from is not None:
+        cfg["seed_from"] = seed_from
+    if language is not None:
+        cfg["language"] = language
 
     # Dry run: estimate and exit
     if dry_run:

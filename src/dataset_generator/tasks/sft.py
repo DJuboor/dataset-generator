@@ -51,6 +51,9 @@ class SFTTask:
         self.complexity = complexity
         self.response_style = response_style
 
+    def required_keys(self) -> set[str]:
+        return {"text", "instruction", "response"}
+
     @classmethod
     def from_config(cls, config: dict) -> SFTTask:
         """Create from config dict."""

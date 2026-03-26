@@ -51,6 +51,9 @@ class ConversationTask:
         self.max_turns = max_turns
         self.system_prompt = system_prompt
 
+    def required_keys(self) -> set[str]:
+        return {"text", "messages"}
+
     @classmethod
     def from_config(cls, config: dict) -> ConversationTask:
         """Create from config dict."""

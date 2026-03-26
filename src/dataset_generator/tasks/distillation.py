@@ -54,6 +54,9 @@ class DistillationTask:
         self.teacher_style = teacher_style
         self.complexity = complexity
 
+    def required_keys(self) -> set[str]:
+        return {"text", "instruction", "teacher_response", "reasoning"}
+
     @classmethod
     def from_config(cls, config: dict) -> DistillationTask:
         """Create from config dict."""
