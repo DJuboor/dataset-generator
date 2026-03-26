@@ -77,6 +77,8 @@ You need labeled training data. Your options are: hire annotators (slow, expensi
 | **7 quality steps** | Dedup, validation, PII removal, language detection, toxicity filtering, balance, diversity |
 | **7 output formats** | JSONL, CSV, Parquet, HuggingFace, OpenAI fine-tune, Alpaca, ShareGPT |
 | **Document grounding** | Generate from your own docs (`--from-docs ./papers/`) |
+| **Seed bootstrapping** | Expand an existing dataset with `--seed-from data.jsonl` |
+| **Multi-language** | Generate in any language with `--language es` (18 languages supported) |
 | **Cost-aware** | Token tracking, budget caps (`--max-cost 5`), dry-run estimates |
 | **Resumable** | Checkpoint long runs, resume with `--resume` |
 | **One-command publish** | `dg push user/my-dataset` with auto-generated dataset cards |
@@ -89,6 +91,8 @@ You need labeled training data. Your options are: hire annotators (slow, expensi
 dg init <task>              # Scaffold config for any of 8 task types
 dg generate                 # Generate dataset from config
 dg generate --from-docs .   # Ground generation on local documents
+dg generate --seed-from d.jsonl # Bootstrap from existing dataset as few-shot examples
+dg generate --language es   # Generate in Spanish (18 languages supported)
 dg generate --max-cost 5    # Set a $5 budget cap
 dg generate --resume        # Resume from last checkpoint
 dg generate --dry-run       # Estimate cost without running
@@ -116,6 +120,12 @@ dg generate --task conversation --domain "tech support" -n 100
 
 # NER with custom entity types
 dg generate --task ner --entity-types "FOOD,DRINK,RESTAURANT" --domain "restaurant reviews" -n 500
+
+# Bootstrap from existing data (auto-switches to few-shot strategy)
+dg generate --task classification --labels "pos,neg" --seed-from existing.jsonl -n 1000
+
+# Generate in Spanish
+dg generate --task classification --labels "positivo,negativo" --language es -n 500
 ```
 
 </details>
@@ -174,6 +184,8 @@ generation:
 | `generation` | `strategy` | `direct` | Generation strategy |
 | `generation` | `max_cost` | — | Budget cap in USD |
 | `from_docs` | — | — | Path to docs for grounded generation |
+| `seed_from` | — | — | Path to JSONL/CSV for few-shot seed examples |
+| `language` | — | — | Target language code (es, fr, de, zh, etc.) |
 | `quality` | `similarity_threshold` | `0.85` | Fuzzy dedup threshold |
 | `quality` | `min_length` | `10` | Min text length (chars) |
 | `quality` | `max_length` | `10000` | Max text length (chars) |

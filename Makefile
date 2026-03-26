@@ -13,6 +13,8 @@ DOMAIN  ?=
 MODEL   ?=
 STRATEGY ?=
 DOCS    ?=
+SEED    ?=
+LANG    ?=
 
 _samples  = $(if $(SAMPLES),-n $(SAMPLES))
 _workers  = $(if $(WORKERS),-w $(WORKERS))
@@ -25,6 +27,8 @@ _domain   = $(if $(DOMAIN),-d "$(DOMAIN)")
 _model    = $(if $(MODEL),-m $(MODEL))
 _strategy = $(if $(STRATEGY),-s $(STRATEGY))
 _docs     = $(if $(DOCS),--from-docs $(DOCS))
+_seed     = $(if $(SEED),--seed-from $(SEED))
+_lang     = $(if $(LANG),--language $(LANG))
 
 # ── Workflow ─────────────────────────────────────────────────────────
 .PHONY: setup init generate validate export push estimate
@@ -36,7 +40,7 @@ init:        ## Scaffold config ─ TASK=classification LABELS="pos,neg"
 	@uv run dg init $(or $(TASK),classification) $(if $(LABELS),-l "$(LABELS)") $(_output)
 
 generate:    ## Generate dataset ─ TASK=sft DOMAIN="coding" SAMPLES=1000
-	@uv run dg generate $(if $(TASK),$(_task),$(_config)) $(_samples) $(_workers) $(_output) $(_format) $(_domain) $(_labels) $(_model) $(_strategy) $(_docs)
+	@uv run dg generate $(if $(TASK),$(_task),$(_config)) $(_samples) $(_workers) $(_output) $(_format) $(_domain) $(_labels) $(_model) $(_strategy) $(_docs) $(_seed) $(_lang)
 
 estimate:    ## Dry-run: estimate cost ─ same flags as generate
 	@uv run dg generate $(if $(TASK),$(_task),$(_config)) $(_samples) $(_workers) $(_domain) $(_labels) $(_model) --dry-run
@@ -90,6 +94,8 @@ help:
 	@printf "  \033[2m  make generate TASK=sft DOMAIN=\"coding\" SAMPLES=500\033[0m\n"
 	@printf "  \033[2m  make generate TASK=classification LABELS=\"pos,neg\" SAMPLES=1000\033[0m\n"
 	@printf "  \033[2m  make generate TASK=qa DOMAIN=\"ML\" DOCS=./papers/ SAMPLES=200\033[0m\n"
+	@printf "  \033[2m  make generate TASK=classification LABELS=\"pos,neg\" SEED=data.jsonl SAMPLES=1000\033[0m\n"
+	@printf "  \033[2m  make generate TASK=classification LABELS=\"pos,neg\" LANG=es SAMPLES=500\033[0m\n"
 	@printf "\n  \033[33mOverrides\033[0m  (combine with any target)\n"
 	@printf "  \033[36m%-16s\033[0m %s\n" "TASK=sft"        "Task: classification, ner, qa, preference, sft, conversation, summarization, distillation"
 	@printf "  \033[36m%-16s\033[0m %s\n" "LABELS=\"a,b\""  "Comma-separated labels (classification/NER)"
@@ -97,6 +103,8 @@ help:
 	@printf "  \033[36m%-16s\033[0m %s\n" "MODEL=gpt-4o"   "Model name override"
 	@printf "  \033[36m%-16s\033[0m %s\n" "STRATEGY=persona" "Strategy: direct, few_shot, persona, cot, adversarial, evolinstruct"
 	@printf "  \033[36m%-16s\033[0m %s\n" "DOCS=./docs/"   "Document path for grounded generation"
+	@printf "  \033[36m%-16s\033[0m %s\n" "SEED=data.jsonl" "Seed file for few-shot bootstrapping"
+	@printf "  \033[36m%-16s\033[0m %s\n" "LANG=es"        "Generate in target language (es, fr, de, zh, ja, ...)"
 	@printf "  \033[36m%-16s\033[0m %s\n" "SAMPLES=1000"   "Number of samples"
 	@printf "  \033[36m%-16s\033[0m %s\n" "WORKERS=20"     "Parallel LLM requests"
 	@printf "  \033[36m%-16s\033[0m %s\n" "FORMAT=openai"  "Output: jsonl, csv, parquet, openai, alpaca, sharegpt"

@@ -35,6 +35,12 @@ generation:
 # Document grounding (optional — generate from your own docs)
 # from_docs: ./docs                         # path to file or directory (txt, pdf, html)
 
+# Bootstrap from existing data (optional — uses your samples as few-shot examples)
+# seed_from: existing_data.jsonl            # auto-switches strategy to few_shot
+
+# Multi-language generation (optional)
+# language: es                              # generate in Spanish (supports 18 languages)
+
 # Quality filters (applied after generation)
 quality:
   similarity_threshold: 0.85                # fuzzy dedup threshold (0-1)
