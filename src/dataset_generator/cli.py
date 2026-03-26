@@ -131,6 +131,11 @@ def generate(
     language: str | None = typer.Option(
         None, "--language", help="Generate in this language (e.g. es, fr, de, zh, ja)"
     ),
+    validate_model: str | None = typer.Option(
+        None,
+        "--validate-model",
+        help="Score/filter samples with a second model (e.g. gpt-4o)",
+    ),
     max_cost: float | None = typer.Option(
         None, "--max-cost", help="Budget cap in USD (stops generation when reached)"
     ),
@@ -140,6 +145,9 @@ def generate(
         help="Request timeout in seconds (default: 600, increase for slow models)",
     ),
     resume: bool = typer.Option(False, "--resume", help="Resume from checkpoint if available"),
+    stream: bool = typer.Option(
+        False, "--stream", help="Stream samples to output file as generated"
+    ),
     dry_run: bool = typer.Option(False, "--dry-run", help="Estimate cost without running"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable debug logging"),
 ) -> None:
@@ -199,6 +207,10 @@ def generate(
         cfg["seed_from"] = seed_from
     if language is not None:
         cfg["language"] = language
+    if validate_model is not None:
+        cfg["validation"] = {"model": validate_model}
+    if stream:
+        cfg["stream"] = True
 
     # Dry run: estimate and exit
     if dry_run:
@@ -335,6 +347,63 @@ def export(
 
     write_output(samples, output, fmt=fmt)
     console.print(f"[green]Exported {len(samples)} samples → {output}[/green]")
+
+
+# ---------------------------------------------------------------------------
+# evaluate
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def evaluate(
+    input_path: str = typer.Argument(..., help="Path to JSONL dataset"),
+    output_json: bool = typer.Option(False, "--json", help="Output metrics as JSON"),
+) -> None:
+    """Evaluate a dataset's quality, diversity, and statistics."""
+    from dataset_generator.formats import read_jsonl
+    from dataset_generator.quality.evaluate import evaluate_dataset
+
+    samples = read_jsonl(input_path)
+    metrics = evaluate_dataset(samples)
+
+    if output_json:
+        import json
+
+        console.print(json.dumps(metrics, indent=2))
+        return
+
+    table = Table(title=f"Dataset Evaluation: {input_path}")
+    table.add_column("Metric", style="bold")
+    table.add_column("Value")
+
+    table.add_row("Samples", str(metrics.get("sample_count", 0)))
+
+    text_stats = metrics.get("text_length", {})
+    table.add_row(
+        "Text length",
+        f"mean={text_stats.get('mean')}, min={text_stats.get('min')}, "
+        f"max={text_stats.get('max')}, std={text_stats.get('std')}",
+    )
+    table.add_row("Vocabulary size", f"{metrics.get('vocabulary_size', 0):,}")
+    table.add_row("Type-token ratio", str(metrics.get("type_token_ratio", 0)))
+
+    table.add_row("---", "---")
+    table.add_row("Distinct-1", str(metrics.get("distinct_1", 0)))
+    table.add_row("Distinct-2", str(metrics.get("distinct_2", 0)))
+    table.add_row("Distinct-3", str(metrics.get("distinct_3", 0)))
+
+    if "self_bleu" in metrics:
+        table.add_row("Self-BLEU", f"{metrics['self_bleu']} (lower = more diverse)")
+
+    if "label_distribution" in metrics:
+        table.add_row("---", "---")
+        table.add_row("Labels", str(metrics.get("num_labels", 0)))
+        table.add_row("Label entropy", str(metrics.get("label_entropy", 0)))
+        for label, count in metrics["label_distribution"].items():
+            pct = count / metrics["sample_count"] * 100
+            table.add_row(f"  {label}", f"{count} ({pct:.1f}%)")
+
+    console.print(table)
 
 
 # ---------------------------------------------------------------------------

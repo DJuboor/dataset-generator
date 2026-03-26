@@ -80,6 +80,13 @@ You need labeled training data. Your options are: hire annotators (slow, expensi
 | **Seed bootstrapping** | Expand an existing dataset with `--seed-from data.jsonl` |
 | **Multi-language** | Generate in any language with `--language es` (18 languages supported) |
 | **Cost-aware** | Token tracking, budget caps (`--max-cost 5`), dry-run estimates |
+| **Multi-model validation** | Generate cheap, filter with a strong model (`--validate-model gpt-4o`) |
+| **LLM-as-judge** | Score samples with any model in the quality pipeline |
+| **Auto-prompt optimization** | Calibration batch + self-critique refines prompts automatically |
+| **Smart RAG retrieval** | TF-IDF semantic retrieval for `--from-docs` (not random chunks) |
+| **Async engine** | Auto-selected for cloud APIs — ~10x throughput vs sync |
+| **Streaming output** | `--stream` writes samples as generated, don't lose progress |
+| **Dataset evaluation** | `dg evaluate` — diversity, self-BLEU, label entropy, text stats |
 | **Resumable** | Checkpoint long runs, resume with `--resume` |
 | **One-command publish** | `dg push user/my-dataset` with auto-generated dataset cards |
 
@@ -95,8 +102,11 @@ dg generate --seed-from d.jsonl # Bootstrap from existing dataset as few-shot ex
 dg generate --language es   # Generate in Spanish (18 languages supported)
 dg generate --max-cost 5    # Set a $5 budget cap
 dg generate --resume        # Resume from last checkpoint
+dg generate --validate-model gpt-4o  # Generate + filter with a second model
+dg generate --stream        # Stream samples to file as they're generated
 dg generate --dry-run       # Estimate cost without running
 dg validate <file>          # Deduplicate and validate existing dataset
+dg evaluate <file>          # Compute diversity, quality, and distribution metrics
 dg export <file> -f parquet # Export to any supported format
 dg push user/my-dataset     # Publish to HuggingFace Hub with auto dataset card
 dg info                     # Show available tasks, strategies, and formats

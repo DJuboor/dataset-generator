@@ -15,6 +15,38 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
+class StreamingWriter:
+    """Incrementally write samples to JSONL as they are generated."""
+
+    def __init__(self, path: str | Path) -> None:
+        self.path = Path(path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._count = 0
+        self._file = open(self.path, "w")  # noqa: SIM115
+
+    def write_batch(self, samples: list[Sample]) -> None:
+        """Append a batch of samples to the output file."""
+        for sample in samples:
+            self._file.write(json.dumps(sample.to_dict()) + "\n")
+        self._file.flush()
+        self._count += len(samples)
+
+    def close(self) -> None:
+        """Close the file and log the total."""
+        self._file.close()
+        logger.info(f"Streamed {self._count} samples to {self.path}")
+
+    @property
+    def count(self) -> int:
+        return self._count
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
+
 def write_jsonl(samples: list[Sample], path: str | Path) -> None:
     """Write samples as JSONL (one JSON object per line)."""
     path = Path(path)

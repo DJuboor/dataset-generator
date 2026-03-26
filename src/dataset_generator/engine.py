@@ -31,6 +31,7 @@ def _generate_batch(
     max_retries: int,
     doc_contexts: list[str] | None = None,
     language: str | None = None,
+    doc_retriever=None,
 ) -> tuple[list[Sample], int, int]:
     """Generate a single batch with retries.
 
@@ -55,10 +56,16 @@ def _generate_batch(
 
     # Inject document context for grounded generation
     if doc_contexts:
-        # Rotate through docs — each batch gets a different window
-        window_size = min(3, len(doc_contexts))
-        start = (batch_index * window_size) % len(doc_contexts)
-        batch_docs = [doc_contexts[(start + i) % len(doc_contexts)] for i in range(window_size)]
+        if doc_retriever:
+            # Semantic retrieval: find chunks most relevant to the task prompt
+            query = next((m["content"] for m in messages if m["role"] == "user"), "")
+            batch_docs = doc_retriever.retrieve(query, k=3)
+        else:
+            # Round-robin fallback for small doc sets
+            window_size = min(3, len(doc_contexts))
+            start = (batch_index * window_size) % len(doc_contexts)
+            batch_docs = [doc_contexts[(start + i) % len(doc_contexts)] for i in range(window_size)]
+
         context_block = "\n\n---\n\n".join(batch_docs)
         for msg in messages:
             if msg["role"] == "user":
@@ -183,6 +190,19 @@ def generate(
 
     strategy = create_strategy(strategy_name, config=strategy_config)
 
+    # Auto-prompt optimization wrapper
+    if strategy_config.get("auto_optimize"):
+        from dataset_generator.strategies.auto_optimize import AutoOptimizeStrategy
+
+        calibration_size = strategy_config.get("calibration_size", 5)
+        strategy = AutoOptimizeStrategy(
+            base_strategy=strategy,
+            provider=provider,
+            task=task,
+            calibration_size=calibration_size,
+        )
+        logger.info(f"Auto-prompt optimization enabled (calibration_size={calibration_size})")
+
     # Multi-language generation
     language = config.get("language")
 
@@ -196,7 +216,16 @@ def generate(
         if chunks:
             doc_contexts = [chunk.text for chunk in chunks]
             logger.info(f"Loaded {len(chunks)} document chunks from {from_docs}")
+            # Build retriever for semantic chunk selection (>10 chunks)
+            if len(doc_contexts) > 10:
+                from dataset_generator.loaders.retriever import TFIDFRetriever
+
+                doc_retriever = TFIDFRetriever(doc_contexts)
+                logger.info("Using TF-IDF retrieval for document chunk selection")
+            else:
+                doc_retriever = None
         else:
+            doc_retriever = None
             logger.warning(f"No documents loaded from {from_docs}")
 
     # Calculate batches needed (overshoot to account for dedup/validation losses)
@@ -236,6 +265,14 @@ def generate(
 
     remaining_batches = list(range(start_batch, num_batches))
 
+    # Streaming output: write samples as they arrive
+    streaming_writer = None
+    if config.get("stream"):
+        from dataset_generator.formats import StreamingWriter
+
+        output_path = config.get("output", {}).get("path", "data/output.jsonl")
+        streaming_writer = StreamingWriter(output_path)
+
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
             executor.submit(
@@ -249,6 +286,7 @@ def generate(
                 max_retries,
                 doc_contexts,
                 language,
+                doc_retriever if from_docs else None,
             ): i
             for i in remaining_batches
         }
@@ -273,6 +311,10 @@ def generate(
                 # Save checkpoint after each batch
                 if checkpoint_mgr and samples:
                     checkpoint_mgr.save(samples, batch_idx, config)
+
+                # Stream to output file
+                if streaming_writer and samples:
+                    streaming_writer.write_batch(samples)
 
                 # Budget cap check
                 if (
@@ -329,6 +371,22 @@ def generate(
             f"Quality pipeline: {quality_report.input_count} → {quality_report.output_count} samples"
         )
 
+    # Multi-model validation: score with a second model
+    validation_config = config.get("validation")
+    if validation_config:
+        from dataset_generator.quality.llm_judge import LLMJudge
+
+        val_model = validation_config.get("model", "")
+        val_threshold = validation_config.get("threshold", 3.0)
+        val_action = validation_config.get("action", "remove")
+        judge = LLMJudge(model=val_model, threshold=val_threshold, action=val_action)
+        before = len(all_samples)
+        all_samples, judge_report = judge.process(all_samples)
+        logger.info(
+            f"Validation model ({val_model}): {before} → {len(all_samples)} samples "
+            f"(removed={judge_report.removed}, threshold={val_threshold})"
+        )
+
     # Trim to requested count
     all_samples = all_samples[:num_samples]
 
@@ -350,11 +408,21 @@ def generate(
     if checkpoint_mgr:
         checkpoint_mgr.cleanup()
 
-    # Write output
-    output_config = config.get("output", {})
-    output_path = output_config.get("path", "data/output.jsonl")
-    output_format = output_config.get("format", "jsonl")
-    write_output(all_samples, output_path, fmt=output_format)
+    # Write output (skip if streaming already wrote the raw samples)
+    if streaming_writer:
+        streaming_writer.close()
+        # Re-write with quality-filtered samples (streaming wrote raw)
+        output_config = config.get("output", {})
+        write_output(
+            all_samples,
+            output_config.get("path", "data/output.jsonl"),
+            fmt=output_config.get("format", "jsonl"),
+        )
+    else:
+        output_config = config.get("output", {})
+        output_path = output_config.get("path", "data/output.jsonl")
+        output_format = output_config.get("format", "jsonl")
+        write_output(all_samples, output_path, fmt=output_format)
 
     return all_samples
 
@@ -561,6 +629,18 @@ async def async_generate(
     if quality_steps_config:
         pipeline = _build_quality_pipeline(quality_steps_config)
         all_samples, _ = pipeline.run(all_samples)
+
+    # Multi-model validation (async path)
+    validation_config = config.get("validation")
+    if validation_config:
+        from dataset_generator.quality.llm_judge import LLMJudge
+
+        judge = LLMJudge(
+            model=validation_config.get("model", ""),
+            threshold=validation_config.get("threshold", 3.0),
+            action=validation_config.get("action", "remove"),
+        )
+        all_samples, _ = judge.process(all_samples)
 
     all_samples = all_samples[:num_samples]
     logger.info(f"Final dataset: {len(all_samples)} samples")
